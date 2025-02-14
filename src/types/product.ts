@@ -79,3 +79,10 @@ export const productLineDefaults: Record<string, Partial<ProductSettings>> = {
     }
   }
 };
+
+export interface SampleData {
+  speedMPM: number;
+  logsPerMin: number;
+}
+
+// Get conversion factors from localStorage or use defaults

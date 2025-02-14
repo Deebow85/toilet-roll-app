@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Folder, FolderPlus, File, FileText, FileSpreadsheet, Image, X, Plus, ChevronRight, ChevronDown, Trash2, Search, Camera, Upload, Filter } from 'lucide-react';
 
+const STORAGE_KEY = 'infoTroubleshootingData';
+
 type FileType = 'doc' | 'excel' | 'image' | 'note';
 
 interface FileItem {
@@ -19,36 +21,10 @@ interface Folder {
 }
 
 export default function InfoTroubleshooting() {
-  const [folders, setFolders] = useState<Folder[]>([
-    {
-      id: '1',
-      name: 'Product Data',
-      subfolders: [
-        { id: '1-1', name: 'Andrex', subfolders: [], files: [] },
-        { id: '1-2', name: 'Waitrose', subfolders: [], files: [] }
-      ],
-      files: []
-    },
-    {
-      id: '2',
-      name: 'Maintainance',
-      subfolders: [
-        { id: '2-1', name: 'Wrappers', subfolders: [], files: [] },
-        { id: '2-2', name: 'Saw', subfolders: [], files: [] },
-        { id: '2-3', name: 'Winder', subfolders: [], files: [] }
-      ],
-      files: []
-    },
-    {
-      id: '3',
-      name: 'Trouble Shooting',
-      subfolders: [
-        { id: '3-1', name: 'Wrappers', subfolders: [], files: [] },
-        { id: '3-2', name: 'Winder', subfolders: [], files: [] }
-      ],
-      files: []
-    }
-  ]);
+  const [folders, setFolders] = useState<Folder[]>(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  });
 
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
@@ -64,6 +40,10 @@ export default function InfoTroubleshooting() {
   const [selectedFolderFilter, setSelectedFolderFilter] = useState<string | 'all'>('all');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [showNoteViewModal, setShowNoteViewModal] = useState(false);
+  const [selectedNote, setSelectedNote] = useState<FileItem | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState('');
 
   // Search functionality
   const searchResults = useMemo(() => {
@@ -272,6 +252,33 @@ export default function InfoTroubleshooting() {
     }
   };
 
+  const handleFileClick = (file: FileItem) => {
+    if (file.type === 'note') {
+      setSelectedNote(file);
+      setEditedContent(file.content || '');
+      setShowNoteViewModal(true);
+    }
+  };
+
+  const handleSaveEdit = () => {
+    if (!selectedNote) return;
+
+    const updateFolders = (folders: Folder[]): Folder[] => {
+      return folders.map(folder => ({
+        ...folder,
+        files: folder.files.map(file => 
+          file.id === selectedNote.id
+            ? { ...file, content: editedContent }
+            : file
+        ),
+        subfolders: updateFolders(folder.subfolders)
+      }));
+    };
+
+    setFolders(updateFolders(folders));
+    setIsEditing(false);
+  };
+
   const renderFolder = (folder: Folder, level: number = 0) => {
     const isExpanded = expandedFolders.includes(folder.id);
 
@@ -328,6 +335,7 @@ export default function InfoTroubleshooting() {
               <div
                 key={file.id}
                 className="flex items-center space-x-2 p-1.5 hover:bg-gray-100 rounded cursor-pointer group"
+                onClick={() => handleFileClick(file)}
               >
                 {getFileIcon(file.type)}
                 <span className="text-sm">{file.name}</span>
@@ -625,6 +633,58 @@ export default function InfoTroubleshooting() {
                 Delete
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Note View Modal */}
+      {showNoteViewModal && selectedNote && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-4">
+                <h3 className="text-lg font-semibold">{selectedNote.name}</h3>
+                {!isEditing && (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="px-3 py-1.5 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200"
+                  >
+                    Edit Note
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {isEditing && (
+                  <button
+                    onClick={handleSaveEdit}
+                    className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    Save Changes
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setShowNoteViewModal(false);
+                    setSelectedNote(null);
+                    setIsEditing(false);
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            {isEditing ? (
+              <textarea
+                value={editedContent}
+                onChange={(e) => setEditedContent(e.target.value)}
+                className="w-full h-96 p-4 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+              />
+            ) : (
+              <div className="bg-gray-50 p-4 rounded-lg whitespace-pre-wrap h-96 overflow-y-auto">
+                {selectedNote.content}
+              </div>
+            )}
           </div>
         </div>
       )}

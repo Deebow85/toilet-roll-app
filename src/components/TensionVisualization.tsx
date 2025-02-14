@@ -13,6 +13,7 @@ interface TensionPoint {
   showMpmOnly?: boolean;
   kg?: number;
   showKg?: boolean;
+  isReference?: boolean;
 }
 
 interface TensionIndicator {
@@ -28,26 +29,26 @@ export default function TensionVisualization() {
     { id: 'infeed', name: 'Infeed Draw Roll', x: 180, y: 200, type: 'tension', showDataBox: true, mpm: 450, percentage: 95 },
     
     // Post-marriage section
-    { id: 'rewind_spreader', name: 'Rewind Spreader', x: 260, y: 200, type: 'spreader', showDataBox: true, mpm: 450, percentage: 95 },
-    { id: 'coater_draw', name: 'Coater Draw Roll', x: 340, y: 200, type: 'tension', showDataBox: true, mpm: 450, percentage: 95 },
-    { id: 'coater_spreader', name: 'Coater Spreader', x: 420, y: 200, type: 'spreader', showDataBox: true, mpm: 450, percentage: 95 },
+    { id: 'rewind_spreader', name: 'Rewind Spreader', x: 260, y: 200, type: 'spreader', showDataBox: true, mpm: 450, percentage: 95, isReference: true },
+    { id: 'coater_draw', name: 'Coater Draw', x: 340, y: 200, type: 'tension', showDataBox: true, mpm: 450, percentage: 95 },
+    { id: 'coater_spreader', name: 'Coater Spreader', x: 420, y: 200, type: 'spreader', showDataBox: true, mpm: 450, percentage: 95, isReference: true },
     { id: 'upper_feed_draw', name: 'Upper Feed Draw', x: 500, y: 200, type: 'tension', showDataBox: true, mpm: 450, percentage: 95 },
     
     // Marriage section
-    { id: 'marriage', name: 'Marriage Roll', x: 580, y: 200, type: 'speed', showDataBox: false },
+    { id: 'marriage', name: 'Marriage Roll', x: 580, y: 200, type: 'speed', showDataBox: false, isReference: true },
     
     // Pre-marriage section - Top row
-    { id: 'steel_top', name: 'Upper Steel', x: 660, y: 100, type: 'speed', showDataBox: true, mpm: 450, showMpmOnly: true },
-    { id: 'spreader_top', name: 'Upper Spreader', x: 740, y: 100, type: 'spreader', showDataBox: true, mpm: 450, percentage: 95 },
+    { id: 'steel_top', name: 'Upper Steel Roll', x: 660, y: 100, type: 'speed', showDataBox: true, mpm: 450, showMpmOnly: true },
+    { id: 'spreader_top', name: 'Upper Spreader', x: 740, y: 100, type: 'spreader', showDataBox: true, mpm: 450, percentage: 95, isReference: true },
     { id: 'draw_top', name: 'Top Draw Roll', x: 820, y: 100, type: 'tension', showDataBox: true, mpm: 450, percentage: 95, kg: 2.5, showKg: true },
-    { id: 'dancer_top', name: 'Top Dancer', x: 900, y: 100, type: 'dancer', showDataBox: true, kg: 2.5 },
+    { id: 'dancer_top', name: 'Top Dancer', x: 900, y: 100, type: 'dancer', showDataBox: true, kg: 2.5, isReference: true },
     { id: 'unwind1', name: 'Unwind 2', x: 980, y: 100, type: 'tension', showDataBox: true, mpm: 450, percentage: 95 },
     
     // Pre-marriage section - Bottom row
-    { id: 'steel_bottom', name: 'Lower Steel', x: 660, y: 300, type: 'speed', showDataBox: true, mpm: 450, showMpmOnly: true },
-    { id: 'spreader_bottom', name: 'Lower Spreader', x: 740, y: 300, type: 'spreader', showDataBox: true, mpm: 450, percentage: 95 },
+    { id: 'steel_bottom', name: 'Lower Steel Roll', x: 660, y: 300, type: 'speed', showDataBox: true, mpm: 450, showMpmOnly: true },
+    { id: 'spreader_bottom', name: 'Lower Spreader', x: 740, y: 300, type: 'spreader', showDataBox: true, mpm: 450, percentage: 95, isReference: true },
     { id: 'draw_bottom', name: 'Bottom Draw Roll', x: 820, y: 300, type: 'tension', showDataBox: true, mpm: 450, percentage: 95, kg: 2.5, showKg: true },
-    { id: 'dancer_bottom', name: 'Bottom Dancer', x: 900, y: 300, type: 'dancer', showDataBox: true, kg: 2.5 },
+    { id: 'dancer_bottom', name: 'Bottom Dancer', x: 900, y: 300, type: 'dancer', showDataBox: true, kg: 2.5, isReference: true },
     { id: 'unwind2', name: 'Unwind 1', x: 980, y: 300, type: 'tension', showDataBox: true, mpm: 450, percentage: 95 }
   ]);
 
@@ -123,10 +124,13 @@ export default function TensionVisualization() {
   };
 
   const getComponentNamePosition = (point: TensionPoint) => {
-    if (point.name === 'Bottom Draw Roll') {
+    if (point.name === 'Marriage Roll') {
+      return { x: 30, y: 0 }; // Position text to the right of the symbol
+    }
+    if (point.name === 'Lower Steel Roll' || point.name === 'Bottom Draw Roll') {
       return { y: -45 };
     }
-    const specialCases = ['Unwind 1', 'Bottom Dancer', 'Lower Spreader', 'Lower Steel'];
+    const specialCases = ['Unwind 1', 'Bottom Dancer', 'Lower Spreader'];
     if (specialCases.includes(point.name)) {
       return { y: -40 };
     }
@@ -142,21 +146,21 @@ export default function TensionVisualization() {
       const topPath = [
         { start: 'unwind1', end: 'draw_top' },
         { start: 'draw_top', end: 'steel_top' },
-        { start: 'steel_top', end: 'upper_feed_draw' },
+        { start: 'steel_top', end: 'upper_feed_draw' }
       ];
 
       // Bottom path (Unwind 1 to Upper Feed Draw)
       const bottomPath = [
         { start: 'unwind2', end: 'draw_bottom' },
         { start: 'draw_bottom', end: 'steel_bottom' },
-        { start: 'steel_bottom', end: 'upper_feed_draw' },
+        { start: 'steel_bottom', end: 'upper_feed_draw' }
       ];
 
       // Main path (Upper Feed Draw to Outfeed)
       const mainPath = [
         { start: 'upper_feed_draw', end: 'coater_draw' },
         { start: 'coater_draw', end: 'infeed' },
-        { start: 'infeed', end: 'outfeed' },
+        { start: 'infeed', end: 'outfeed' }
       ];
 
       return [...topPath, ...bottomPath, ...mainPath];
@@ -185,9 +189,9 @@ export default function TensionVisualization() {
     const normalizedThickness = Math.min(absValue / maxDiff * 3, 3); // Scale thickness up to 3px
     
     return {
-      stroke: difference > 0 ? '#ef4444' : '#3b82f6', // red for tension, blue for slack
+      stroke: difference > 0 ? '#22c55e' : '#ef4444', // green for tension, red for slack
       strokeWidth: Math.max(normalizedThickness, 0.5),
-      strokeDasharray: absValue < 5 ? '3,3' : 'none', // Dashed line for minimal difference
+      strokeDasharray: 'none', // Remove minimum difference check for dashed lines
       opacity: Math.min(Math.max(absValue / maxDiff, 0.3), 0.8) // Opacity based on difference
     };
   };
@@ -196,27 +200,53 @@ export default function TensionVisualization() {
     const midX = (start.x + end.x) / 2;
     const midY = (start.y + end.y) / 2;
     
-    // Calculate offset based on y-position
-    let yOffset = -10;  // Default offset
+    // Special handling for bottom row connections
+    if (
+      (start.id === 'unwind2' && end.id === 'draw_bottom') ||
+      (start.id === 'draw_bottom' && end.id === 'steel_bottom')
+    ) {
+      return { x: midX, y: midY + 35 }; // Position below the symbols
+    }
     
-    // If points are at y=200 (middle row), move labels higher to avoid data boxes
+    // Default positioning for other connections
+    let yOffset = -10;
+    
     if (start.y === 200 || end.y === 200) {
       yOffset = -25;
-    }
-    // If points are at y=100 (top row), adjust offset
-    else if (start.y === 100 && end.y === 100) {
+    } else if (start.y === 100 && end.y === 100) {
       yOffset = -20;
-    }
-    // If points are at y=300 (bottom row), adjust offset
-    else if (start.y === 300 && end.y === 300) {
+    } else if (start.y === 300 && end.y === 300) {
       yOffset = -20;
-    }
-    // For diagonal connections, increase offset
-    else {
+    } else {
       yOffset = -30;
     }
     
     return { x: midX, y: midY + yOffset };
+  };
+
+  const renderConnectionPaths = () => {
+    const paths = [
+      // Top path (Unwind 2 to Upper Feed Draw)
+      'M980,100 H900 H820 H740 H660 L580,200',
+      
+      // Bottom path (Unwind 1 to Upper Feed Draw)
+      'M980,300 H900 H820 H740 H660 L580,200',
+      
+      // Main path (Upper Feed Draw to Outfeed)
+      'M580,200 H500 H420 H340 H260 H180 H100'
+    ];
+
+    return paths.map((d, i) => (
+      <path
+        key={`connection-${i}`}
+        d={d}
+        stroke="#94a3b8"
+        strokeWidth="2"
+        fill="none"
+        strokeDasharray="4 2"
+        className="opacity-50"
+      />
+    ));
   };
 
   return (
@@ -228,28 +258,15 @@ export default function TensionVisualization() {
           viewBox="0 0 1050 400"
           className="border rounded-lg bg-white"
         >
-          {/* Tension Indicators - render before paper paths */}
+          {/* Connection Paths */}
+          {renderConnectionPaths()}
+
+          {/* Tension Indicators */}
           {tensionIndicators.map((indicator, index) => {
             const style = getTensionLineStyle(indicator.difference);
-            const midX = (indicator.startPoint.x + indicator.endPoint.x) / 2;
-            const midY = (indicator.startPoint.y + indicator.endPoint.y) / 2;
+            const labelPos = getTensionLabelPosition(indicator.startPoint, indicator.endPoint);
+            const isTension = indicator.difference > 0;
             
-            // Calculate label position based on line position
-            let labelY;
-            if (indicator.startPoint.y === indicator.endPoint.y) {
-              // Horizontal lines
-              if (indicator.startPoint.y === 200) {
-                labelY = midY - 35; // Middle row - place higher above data boxes
-              } else if (indicator.startPoint.y === 100) {
-                labelY = midY - 25; // Top row
-              } else {
-                labelY = midY + 35; // Bottom row
-              }
-            } else {
-              // Diagonal lines
-              labelY = midY - 25; // Place above the line for diagonal connections
-            }
-
             return (
               <g key={`tension-${index}`} className="tension-indicator">
                 <path
@@ -260,53 +277,30 @@ export default function TensionVisualization() {
                   opacity={style.opacity}
                   fill="none"
                 />
-                {Math.abs(indicator.difference) >= 5 && (
-                  <>
-                    {/* Background for better readability */}
-                    <rect
-                      x={midX - 20}
-                      y={labelY - 8}
-                      width="40"
-                      height="12"
-                      fill="white"
-                      opacity="0.8"
-                      rx="2"
-                    />
-                    {/* Label text */}
-                    <text
-                      x={midX}
-                      y={labelY}
-                      textAnchor="middle"
-                      className="text-[10px] fill-gray-600 font-medium"
-                    >
-                      {indicator.difference > 0 ? '+' : ''}{indicator.difference} MPM
-                    </text>
-                  </>
-                )}
+                {/* Show values for all differences */}
+                <rect
+                  x={labelPos.x - 35}
+                  y={labelPos.y - 8}
+                  width="70"
+                  height="16"
+                  fill="white"
+                  opacity="0.9"
+                  rx="3"
+                />
+                <text
+                  x={labelPos.x}
+                  y={labelPos.y}
+                  textAnchor="middle"
+                  className={`text-[10px] font-medium ${
+                    isTension ? 'fill-green-600' : 'fill-red-600'
+                  }`}
+                >
+                  {isTension ? '+' : ''}{indicator.difference} MPM {isTension ? 'T' : 'S'}
+                </text>
               </g>
             );
           })}
 
-          {/* Paper paths */}
-          <path
-            d="M980,100 H900 H820 H740 H660 L580,200"
-            stroke="#94a3b8"
-            strokeWidth="2"
-            fill="none"
-          />
-          <path
-            d="M980,300 H900 H820 H740 H660 L580,200"
-            stroke="#94a3b8"
-            strokeWidth="2"
-            fill="none"
-          />
-          <path
-            d="M580,200 H500 H420 H340 H260 H180 H100"
-            stroke="#94a3b8"
-            strokeWidth="2"
-            fill="none"
-          />
-          
           {/* Perforating line */}
           <line
             x1="140"
@@ -346,7 +340,7 @@ export default function TensionVisualization() {
             Bedroll
           </text>
 
-          {/* Render tension points and data boxes */}
+          {/* Points and Data Boxes */}
           {tensionPoints.map(point => (
             <g key={point.id}>
               {/* Data Box */}
@@ -375,7 +369,6 @@ export default function TensionVisualization() {
                     </text>
                   ) : (
                     <>
-                      {/* MPM Value */}
                       <text
                         x="0"
                         y="-10"
@@ -384,7 +377,6 @@ export default function TensionVisualization() {
                       >
                         {point.mpm} MPM
                       </text>
-                      {/* Percentage Value */}
                       {!point.showMpmOnly && point.percentage && (
                         <text
                           x="0"
@@ -395,7 +387,6 @@ export default function TensionVisualization() {
                           {point.percentage}%
                         </text>
                       )}
-                      {/* KG Value */}
                       {point.showKg && (
                         <text
                           x="0"
@@ -413,30 +404,33 @@ export default function TensionVisualization() {
 
               {/* Point Circle and Icon */}
               <g transform={`translate(${point.x},${point.y})`}>
-                {/* Component name */}
-                {point.name.split(' ').map((word, i, arr) => (
-                  <text
-                    key={i}
-                    x="0"
-                    y={getComponentNamePosition(point).y + i * 12}
-                    textAnchor="middle"
-                    className="text-[10px] fill-gray-600"
-                  >
-                    {word}
-                  </text>
-                ))}
+                {/* Component name with updated positioning */}
+                {point.name.split(' ').map((word, i, arr) => {
+                  const position = getComponentNamePosition(point);
+                  return (
+                    <text
+                      key={i}
+                      x={position.x || 0}
+                      y={position.y + i * 12}
+                      textAnchor={position.x ? "start" : "middle"}
+                      className={`text-[10px] ${point.isReference ? 'fill-amber-600' : 'fill-gray-600'}`}
+                    >
+                      {word}
+                    </text>
+                  );
+                })}
 
-                {/* Background circle with click handler */}
+                {/* Background circle */}
                 <circle
                   r="16"
-                  fill="#f1f5f9"
-                  stroke="#94a3b8"
+                  fill={point.isReference ? '#fef3c7' : '#f1f5f9'}
+                  stroke={point.isReference ? '#d97706' : '#94a3b8'}
                   strokeWidth="2"
                   className="cursor-pointer"
                   onClick={(e) => handlePointClick(e, point)}
                 />
                 
-                {/* Icon with click handler */}
+                {/* Icon */}
                 <foreignObject 
                   x="-10" 
                   y="-10" 
@@ -445,7 +439,9 @@ export default function TensionVisualization() {
                   className="cursor-pointer"
                   onClick={(e) => handlePointClick(e, point)}
                 >
-                  <div className="flex items-center justify-center w-full h-full">
+                  <div className={`flex items-center justify-center w-full h-full ${
+                    point.isReference ? 'text-amber-600' : 'text-gray-600'
+                  }`}>
                     {getPointIcon(point.type)}
                   </div>
                 </foreignObject>
@@ -455,7 +451,7 @@ export default function TensionVisualization() {
         </svg>
       </div>
 
-      {/* Control Panel for Data Boxes */}
+      {/* Control Panel Modal */}
       {selectedDataBox && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">

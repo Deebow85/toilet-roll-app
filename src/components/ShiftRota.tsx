@@ -2,21 +2,22 @@ import React, { useState, useRef } from 'react';
 import { ChevronLeft, ChevronRight, X, Plus, MessageSquare, ChevronDown, ZoomIn, ZoomOut, Upload, FileText, Clock } from 'lucide-react';
 
 type ShiftType = {
-  type: 'Day' | 'Night' | 'OT Day' | 'OT Night' | 'Holiday' | 'Swap Day (Owed)' | 'Swap Night (Owed)' | 'Swap Day (Done)' | 'Swap Night (Done)' | null;
+  type: 'Day' | 'Night' | 'OT Day' | 'OT Night' | 'Holiday' | 'Swap Day (Owed)' | 'Swap Night (Owed)' | 'Swap Day (Done)' | 'Swap Night (Done)' | '18 Off' | null;
   note?: string;
   hours?: number;
 };
 
 const SHIFT_COLORS = {
-  'Day': 'bg-green-200 hover:bg-green-300',
-  'Night': 'bg-red-200 hover:bg-red-300',
-  'OT Day': 'bg-blue-200 hover:bg-blue-300',
-  'OT Night': 'bg-orange-200 hover:bg-orange-300',
-  'Holiday': 'bg-yellow-200 hover:bg-yellow-300',
-  'Swap Day (Owed)': 'bg-purple-200 hover:bg-purple-300',
-  'Swap Night (Owed)': 'bg-amber-800 hover:bg-amber-900 text-white',
-  'Swap Day (Done)': 'bg-cyan-200 hover:bg-cyan-300',
-  'Swap Night (Done)': 'bg-pink-200 hover:bg-pink-300',
+  'Day': 'bg-[#4F7942] hover:bg-[#3e5e34] text-white', // Fern Green
+  'Night': 'bg-[#E35335] hover:bg-[#d13f20] text-white', // Poppy Red
+  'OT Day': 'bg-[#0047AB] hover:bg-[#003a89] text-white', // Electric Blue
+  'OT Night': 'bg-[#FF9933] hover:bg-[#ff8000] text-white', // Illuminous Orange
+  'Holiday': 'bg-[#CC9900] hover:bg-[#b38600] text-white', // Darker Yellow
+  'Swap Day (Owed)': 'bg-[#00B7EB] hover:bg-[#0099c2] text-white', // Cyan
+  'Swap Night (Owed)': 'bg-[#8B4513] hover:bg-[#723910] text-white', // Oak tree brown
+  'Swap Day (Done)': 'bg-[#800080] hover:bg-[#660066] text-white', // Purple
+  'Swap Night (Done)': 'bg-[#B8D5B8] hover:bg-[#a6c9a6] text-gray-700', // Lighter Moss Green
+  '18 Off': 'bg-[#405959] hover:bg-[#334747] text-white', // Lighter Slate Grey
 };
 
 const ShiftRota = () => {
@@ -102,6 +103,13 @@ const ShiftRota = () => {
     setShowModal(true);
   };
 
+  const handleNoteClick = (e: React.MouseEvent, date: string) => {
+    e.stopPropagation(); // Prevent opening the shift selection modal
+    setSelectedDate(date);
+    setCurrentNote(shifts[date]?.note || '');
+    setShowNoteModal(true);
+  };
+
   const handleShiftSelect = (type: ShiftType['type']) => {
     if (selectedDate) {
       if (type === 'OT Day' || type === 'OT Night') {
@@ -154,7 +162,11 @@ const ShiftRota = () => {
     if (selectedDate) {
       setShifts(prev => ({
         ...prev,
-        [selectedDate]: { ...prev[selectedDate], note: currentNote }
+        [selectedDate]: { 
+          ...prev[selectedDate], 
+          note: currentNote,
+          type: prev[selectedDate]?.type || null 
+        }
       }));
     }
     setShowNoteModal(false);
@@ -188,9 +200,9 @@ const ShiftRota = () => {
   };
 
   const renderCalendar = () => {
+    const days = [];
     const daysInMonth = getDaysInMonth(currentDate);
     const firstDay = getFirstDayOfMonth(currentDate);
-    const days = [];
 
     // Add empty cells for days before the first day of the month
     for (let i = 0; i < firstDay; i++) {
@@ -210,7 +222,9 @@ const ShiftRota = () => {
           className={`${showAllShifts ? 'h-8' : 'h-16'} border border-gray-200 p-1 cursor-pointer transition-colors ${shiftColor}`}
         >
           <div className="flex justify-between items-start">
-            <span className={`font-semibold ${showAllShifts ? 'text-xs' : 'text-sm'}`}>{day}</span>
+            <span className={`font-semibold ${showAllShifts ? 'text-xs' : 'text-sm'} ${shift?.type ? 'text-white' : ''}`}>
+              {day}
+            </span>
             <div className="flex items-center gap-1">
               {shift?.hours && (shift.type === 'OT Day' || shift.type === 'OT Night') && (
                 <span className="text-xs bg-white bg-opacity-50 px-1 rounded">
@@ -218,12 +232,29 @@ const ShiftRota = () => {
                 </span>
               )}
               {shift?.note && (
-                <MessageSquare className={`${showAllShifts ? 'w-2.5 h-2.5' : 'w-3 h-3'} text-gray-600`} />
+                <button
+                  onClick={(e) => handleNoteClick(e, dateStr)}
+                  className="p-0.5 rounded hover:bg-black/10"
+                >
+                  <MessageSquare 
+                    className={`
+                      ${showAllShifts ? 'w-2.5 h-2.5' : 'w-3 h-3'} 
+                      ${shift.type ? 'text-white' : 'text-gray-600'}
+                    `} 
+                  />
+                </button>
               )}
             </div>
           </div>
           {shift?.type && (
-            <div className={`${showAllShifts ? 'text-[10px]' : 'text-xs'} mt-0.5 truncate`}>{shift.type}</div>
+            <div className={`${showAllShifts ? 'text-[10px]' : 'text-xs'} mt-0.5 truncate text-white`}>
+              {shift.type}
+            </div>
+          )}
+          {shift?.note && !showAllShifts && (
+            <div className={`text-[10px] mt-0.5 truncate ${shift.type ? 'text-white/90' : 'text-gray-600'}`}>
+              {shift.note}
+            </div>
           )}
         </div>
       );

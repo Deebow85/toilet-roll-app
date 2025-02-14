@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Folder, FolderPlus, File, FileText, FileSpreadsheet, Image, X, Plus, ChevronRight, ChevronDown, Trash2, Search, Camera, Upload, Filter, CheckSquare, Check, Square } from 'lucide-react';
 
-type FileType = 'doc' | 'excel' | 'image' | 'note' | 'checklist';
+type FileType = 'doc' | 'excel' | 'image' | 'note' | 'checklist' | 'function-template';
 
 interface ChecklistItem {
   task: string;
@@ -9,12 +9,24 @@ interface ChecklistItem {
   done: boolean;
 }
 
+interface FunctionTemplate {
+  headers: string[];
+  rows: string[][];
+}
+
+const emptyChecklistItem: ChecklistItem = {
+  task: '',
+  value: '',
+  done: false
+};
+
 interface FileItem {
   id: string;
   name: string;
   type: FileType;
   content?: string;
   checklist?: ChecklistItem[];
+  template?: FunctionTemplate;
   url?: string;
 }
 
@@ -26,35 +38,15 @@ interface Folder {
 }
 
 export default function ProductGradeChange() {
-  const [folders, setFolders] = useState<Folder[]>([
-    {
-      id: '1',
-      name: 'Grade Change Procedures',
-      subfolders: [
-        { id: '1-1', name: 'Standard Grades', subfolders: [], files: [] },
-        { id: '1-2', name: 'Special Grades', subfolders: [], files: [] }
-      ],
-      files: []
-    },
-    {
-      id: '2',
-      name: 'Product Settings',
-      subfolders: [
-        { id: '2-1', name: 'Core Sizes', subfolders: [], files: [] },
-        { id: '2-2', name: 'Roll Sizes', subfolders: [], files: [] }
-      ],
-      files: []
-    },
-    {
-      id: '3',
-      name: 'Quality Standards',
-      subfolders: [
-        { id: '3-1', name: 'Specifications', subfolders: [], files: [] },
-        { id: '3-2', name: 'Testing Procedures', subfolders: [], files: [] }
-      ],
-      files: []
-    }
-  ]);
+  const [folders, setFolders] = useState<Folder[]>(() => {
+    const stored = localStorage.getItem('gradeChangeData');
+    return stored ? JSON.parse(stored) : [
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('gradeChangeData', JSON.stringify(folders));
+  }, [folders]);
 
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
@@ -64,17 +56,22 @@ export default function ProductGradeChange() {
   const [newFileName, setNewFileName] = useState('');
   const [newFileType, setNewFileType] = useState<FileType>('note');
   const [newFileContent, setNewFileContent] = useState('');
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([emptyChecklistItem]);
+  const [templateHeaders, setTemplateHeaders] = useState<string[]>(['Function', 'Value', 'Unit']);
+  const [templateRows, setTemplateRows] = useState<string[][]>([['', '', '']]);
+  const [showChecklistModal, setShowChecklistModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
+  const [editingChecklist, setEditingChecklist] = useState<ChecklistItem[]>([]);
+  const [isEditingExisting, setIsEditingExisting] = useState(false);
+  const [showFunctionModal, setShowFunctionModal] = useState(false);
+  const [editingFunction, setEditingFunction] = useState<FunctionTemplate | null>(null);
+  const [isEditingFunction, setIsEditingFunction] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: string; type: 'folder' | 'file' } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolderFilter, setSelectedFolderFilter] = useState<string | 'all'>('all');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
-  const [showChecklistModal, setShowChecklistModal] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
-  const [editingChecklist, setEditingChecklist] = useState<ChecklistItem[]>([]);
-  const [isEditingExisting, setIsEditingExisting] = useState(false);
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return null;
@@ -198,43 +195,26 @@ export default function ProductGradeChange() {
     setShowNewFolderModal(false);
   };
 
-  const handleAddFile = () => {
-    if (!selectedFolderId || !newFileName.trim()) return;
+  const handleAddTemplateRow = () => {
+    setTemplateRows(prev => [...prev, Array(templateHeaders.length).fill('')]);
+  };
 
-    const updateFolders = (folders: Folder[]): Folder[] => {
-      return folders.map(folder => {
-        if (folder.id === selectedFolderId) {
-          return {
-            ...folder,
-            files: [
-              ...folder.files,
-              {
-                id: `file-${folder.files.length + 1}`,
-                name: newFileName.trim(),
-                type: newFileType,
-                content: newFileType === 'checklist' ? JSON.stringify(checklistItems) : newFileContent,
-                checklist: newFileType === 'checklist' ? checklistItems : undefined
-              }
-            ]
-          };
-        }
-        return {
-          ...folder,
-          subfolders: updateFolders(folder.subfolders)
-        };
-      });
-    };
+  const handleUpdateTemplateCell = (rowIndex: number, colIndex: number, value: string) => {
+    setTemplateRows(prev => 
+      prev.map((row, i) => 
+        i === rowIndex 
+          ? row.map((cell, j) => j === colIndex ? value : cell)
+          : row
+      )
+    );
+  };
 
-    setFolders(updateFolders(folders));
-    setNewFileName('');
-    setNewFileType('note');
-    setNewFileContent('');
-    setChecklistItems([]);
-    setShowNewFileModal(false);
+  const handleRemoveTemplateRow = (index: number) => {
+    setTemplateRows(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleAddChecklistItem = () => {
-    setChecklistItems(prev => [...prev, { task: '', value: '', done: false }]);
+    setChecklistItems(prev => [...prev, { ...emptyChecklistItem }]);
   };
 
   const handleUpdateChecklistItem = (index: number, field: keyof ChecklistItem, value: string | boolean) => {
@@ -252,34 +232,31 @@ export default function ProductGradeChange() {
   const handleDelete = () => {
     if (!itemToDelete) return;
 
-    if (itemToDelete.type === 'folder') {
-      if (itemToDelete.id.startsWith('main-')) {
-        setFolders(folders.filter(f => f.id !== itemToDelete.id));
-      } else {
-        const updateFolders = (folders: Folder[]): Folder[] => {
-          return folders.map(folder => ({
-            ...folder,
-            subfolders: folder.subfolders
+    const updateFolders = (foldersToUpdate: Folder[]): Folder[] => {
+      if (itemToDelete.type === 'folder') {
+        const topLevelFolder = foldersToUpdate.find(f => f.id === itemToDelete.id);
+        if (topLevelFolder) {
+          return foldersToUpdate.filter(f => f.id !== itemToDelete.id);
+        }
+      }
+      
+      return foldersToUpdate.map(folder => ({
+        ...folder,
+        files: itemToDelete.type === 'file' 
+          ? folder.files.filter(f => f.id !== itemToDelete.id)
+          : folder.files,
+        subfolders: itemToDelete.type === 'folder'
+          ? folder.subfolders
               .filter(sf => sf.id !== itemToDelete.id)
               .map(sf => ({
                 ...sf,
                 subfolders: updateFolders(sf.subfolders)
               }))
-          }));
-        };
-        setFolders(updateFolders(folders));
-      }
-    } else {
-      const updateFolders = (folders: Folder[]): Folder[] => {
-        return folders.map(folder => ({
-          ...folder,
-          files: folder.files.filter(f => f.id !== itemToDelete.id),
-          subfolders: updateFolders(folder.subfolders)
-        }));
-      };
-      setFolders(updateFolders(folders));
-    }
+          : updateFolders(folder.subfolders)
+      }));
+    };
 
+    setFolders(updateFolders(folders));
     setShowDeleteConfirmModal(false);
     setItemToDelete(null);
   };
@@ -293,7 +270,9 @@ export default function ProductGradeChange() {
       case 'image':
         return <Image className="w-4 h-4 text-purple-500" />;
       case 'checklist':
-        return <CheckSquare className="w-4 h-4 text-amber-500" />;
+        return <CheckSquare className="w-4 h-4 text-green-500" />;
+      case 'function-template':
+        return <FileSpreadsheet className="w-4 h-4 text-amber-500" />;
       case 'note':
         return <File className="w-4 h-4 text-gray-500" />;
     }
@@ -302,10 +281,86 @@ export default function ProductGradeChange() {
   const handleFileClick = (file: FileItem) => {
     if (file.type === 'checklist') {
       setSelectedFile(file);
-      setEditingChecklist(file.checklist || []);
+      const checklist = file.checklist || [];
+      setEditingChecklist(checklist);
       setShowChecklistModal(true);
       setIsEditingExisting(true);
+    } else if (file.type === 'function-template') {
+      setSelectedFile(file);
+      setEditingFunction(file.template || null);
+      setShowFunctionModal(true);
+      setIsEditingFunction(false);
     }
+  };
+
+  const handleSaveFunction = () => {
+    if (!selectedFile || !editingFunction) return;
+
+    const updateFolders = (folders: Folder[]): Folder[] => {
+      return folders.map(folder => ({
+        ...folder,
+        files: folder.files.map(file => 
+          file.id === selectedFile.id
+            ? {
+                ...file,
+                template: editingFunction,
+                content: JSON.stringify(editingFunction)
+              }
+            : file
+        ),
+        subfolders: updateFolders(folder.subfolders)
+      }));
+    };
+
+    setFolders(updateFolders(folders));
+    setShowFunctionModal(false);
+    setSelectedFile(null);
+    setEditingFunction(null);
+    setIsEditingFunction(false);
+  };
+
+  const handleAddFile = () => {
+    if (!selectedFolderId || !newFileName.trim()) return;
+
+    const fileContent = newFileType === 'checklist' 
+      ? JSON.stringify(checklistItems)
+      : newFileType === 'function-template'
+        ? JSON.stringify({ headers: templateHeaders, rows: templateRows })
+        : newFileContent;
+
+    const updateFolders = (folders: Folder[]): Folder[] => {
+      return folders.map(folder => {
+        if (folder.id === selectedFolderId) {
+          return {
+            ...folder,
+            files: [
+              ...folder.files,
+              { 
+                id: `file-${folder.files.length + 1}`,
+                name: newFileName.trim(),
+                type: newFileType,
+                content: fileContent,
+                checklist: newFileType === 'checklist' ? checklistItems : undefined,
+                template: newFileType === 'function-template' ? { headers: templateHeaders, rows: templateRows } : undefined
+              }
+            ]
+          };
+        }
+        return {
+          ...folder,
+          subfolders: updateFolders(folder.subfolders)
+        };
+      });
+    };
+
+    setFolders(updateFolders(folders));
+    setNewFileName('');
+    setNewFileType('note');
+    setNewFileContent('');
+    setChecklistItems([emptyChecklistItem]);
+    setTemplateHeaders(['Function', 'Value', 'Unit']);
+    setTemplateRows([['', '', '']]);
+    setShowNewFileModal(false);
   };
 
   const handleSaveExistingChecklist = () => {
@@ -431,7 +486,6 @@ export default function ProductGradeChange() {
   return (
     <div className="p-2 sm:p-4">
       <div className="bg-white rounded-lg shadow-md">
-        {/* Search Section */}
         <div className="p-3 border-b">
           <div className="flex flex-col space-y-2">
             <div className="flex space-x-2">
@@ -454,7 +508,6 @@ export default function ProductGradeChange() {
             </div>
           </div>
 
-          {/* Search Results */}
           {searchResults && searchResults.length > 0 && (
             <div className="mt-3">
               <h3 className="text-sm font-semibold text-gray-700 mb-2">Results ({searchResults.length})</h3>
@@ -500,7 +553,6 @@ export default function ProductGradeChange() {
           )}
         </div>
 
-        {/* Quick Actions */}
         <div className="p-3 border-b">
           <div className="grid grid-cols-3 gap-2">
             <button
@@ -538,13 +590,11 @@ export default function ProductGradeChange() {
           </div>
         </div>
 
-        {/* Folder Structure */}
         <div className="p-3">
           {folders.map(folder => renderFolder(folder))}
         </div>
       </div>
 
-      {/* Filter Modal */}
       {showFilterModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-40">
           <div className="bg-white rounded-t-xl sm:rounded-xl w-full max-w-sm p-4">
@@ -574,7 +624,6 @@ export default function ProductGradeChange() {
         </div>
       )}
 
-      {/* New Folder Modal */}
       {showNewFolderModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
           <div className="bg-white rounded-lg p-4 w-full max-w-sm">
@@ -614,7 +663,6 @@ export default function ProductGradeChange() {
         </div>
       )}
 
-      {/* New File Modal */}
       {showNewFileModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
           <div className="bg-white rounded-lg p-4 w-full max-w-sm">
@@ -640,19 +688,62 @@ export default function ProductGradeChange() {
               className="w-full p-2 border rounded mb-4"
             >
               <option value="note">Note</option>
+              <option value="checklist">Checklist</option>
+              <option value="function-template">Product Functions</option>
               <option value="doc">Word Document</option>
               <option value="excel">Excel Spreadsheet</option>
               <option value="image">Image</option>
-              <option value="checklist">Checklist</option>
             </select>
             
-            {newFileType === 'note' && (
-              <textarea
-                value={newFileContent}
-                onChange={(e) => setNewFileContent(e.target.value)}
-                placeholder="Note content"
-                className="w-full h-32 p-2 border rounded mb-4 resize-none"
-              />
+            {newFileType === 'function-template' && (
+              <div className="mb-4">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead>
+                      <tr>
+                        {templateHeaders.map((header, index) => (
+                          <th key={index} className="px-4 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
+                            {header}
+                          </th>
+                        ))}
+                        <th className="w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {templateRows.map((row, rowIndex) => (
+                        <tr key={rowIndex}>
+                          {row.map((cell, colIndex) => (
+                            <td key={colIndex} className="px-4 py-2">
+                              <input
+                                type="text"
+                                value={cell}
+                                onChange={(e) => handleUpdateTemplateCell(rowIndex, colIndex, e.target.value)}
+                                className="w-full p-1 text-sm border rounded"
+                                placeholder={templateHeaders[colIndex]}
+                              />
+                            </td>
+                          ))}
+                          <td className="px-2">
+                            <button
+                              onClick={() => handleRemoveTemplateRow(rowIndex)}
+                              className="p-1 hover:bg-red-100 rounded"
+                            >
+                              <X className="w-4 h-4 text-red-500" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <button
+                  onClick={handleAddTemplateRow}
+                  className="mt-3 w-full p-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm flex items-center justify-center space-x-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Row</span>
+                </button>
+              </div>
             )}
 
             {newFileType === 'checklist' && (
@@ -661,16 +752,18 @@ export default function ProductGradeChange() {
                   {checklistItems.map((item, index) => (
                     <div key={index} className="flex items-start space-x-2">
                       <div className="flex-1 space-y-2">
+                        <label className="block text-xs text-gray-600">Task</label>
                         <input
                           type="text"
-                          value={item.task}
+                          value={item.task || ''}
                           onChange={(e) => handleUpdateChecklistItem(index, 'task', e.target.value)}
                           placeholder="Task description"
                           className="w-full p-2 border rounded text-sm"
                         />
+                        <label className="block text-xs text-gray-600">Value</label>
                         <input
                           type="text"
-                          value={item.value}
+                          value={item.value || ''}
                           onChange={(e) => handleUpdateChecklistItem(index, 'value', e.target.value)}
                           placeholder="Value"
                           className="w-full p-2 border rounded text-sm"
@@ -695,6 +788,15 @@ export default function ProductGradeChange() {
               </div>
             )}
 
+            {newFileType === 'note' && (
+              <textarea
+                value={newFileContent}
+                onChange={(e) => setNewFileContent(e.target.value)}
+                placeholder="Note content"
+                className="w-full h-32 p-2 border rounded mb-4 resize-none"
+              />
+            )}
+
             <div className="flex justify-end space-x-2">
               <button
                 onClick={() => setShowNewFileModal(false)}
@@ -706,9 +808,124 @@ export default function ProductGradeChange() {
                 onClick={handleAddFile}
                 className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
               >
-                Create
+                {isEditingExisting ? 'Update' : 'Create'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Function View/Edit Modal */}
+      {showFunctionModal && selectedFile && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
+          <div className="bg-white rounded-lg p-4 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">{selectedFile.name}</h3>
+              <button
+                onClick={() => {
+                  setShowFunctionModal(false);
+                  setSelectedFile(null);
+                  setEditingFunction(null);
+                  setIsEditingFunction(false);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {isEditingFunction ? (
+              <>
+                <div className="overflow-x-auto mb-4">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead>
+                      <tr>
+                        {editingFunction?.headers.map((header, index) => (
+                          <th key={index} className="px-4 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
+                            {header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {editingFunction?.rows.map((row, rowIndex) => (
+                        <tr key={rowIndex}>
+                          {row.map((cell, colIndex) => (
+                            <td key={colIndex} className="px-4 py-2">
+                              <input
+                                type="text"
+                                value={cell}
+                                onChange={(e) => {
+                                  const newRows = [...(editingFunction?.rows || [])];
+                                  newRows[rowIndex][colIndex] = e.target.value;
+                                  setEditingFunction({
+                                    ...editingFunction!,
+                                    rows: newRows
+                                  });
+                                }}
+                                className="w-full p-1 text-sm border rounded"
+                                placeholder={editingFunction?.headers[colIndex]}
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <button
+                    onClick={() => {
+                      setIsEditingFunction(false);
+                    }}
+                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveFunction}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="overflow-x-auto mb-4">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead>
+                      <tr>
+                        {selectedFile.template?.headers.map((header, index) => (
+                          <th key={index} className="px-4 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
+                            {header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {selectedFile.template?.rows.map((row, rowIndex) => (
+                        <tr key={rowIndex}>
+                          {row.map((cell, colIndex) => (
+                            <td key={colIndex} className="px-4 py-2 text-sm">
+                              {cell}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setIsEditingFunction(true)}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                  >
+                    Edit
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -761,7 +978,7 @@ export default function ProductGradeChange() {
                     onClick={handleResetChecklist}
                     className="px-3 py-1.5 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600"
                   >
-                                    Reset All
+                    Reset All
                   </button>
                 )}
                 <button
@@ -788,7 +1005,9 @@ export default function ProductGradeChange() {
                     {item.done ? (
                       <Check className="w-5 h-5 text-green-500" />
                     ) : (
-                      <Square className="w-5 h-5 text-gray-400" />
+                      <Square
+                        className="w-5 h-5 text-gray-400"
+                      />
                     )}
                   </button>
                   <div className="flex-1 space-y-1">
@@ -815,3 +1034,4 @@ export default function ProductGradeChange() {
     </div>
   );
 }
+                

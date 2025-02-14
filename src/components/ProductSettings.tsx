@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useProductSettings } from '../context/ProductSettingsContext';
 import { useProduct } from '../context/ProductContext';
-import { ProductSettings as IProductSettings, defaultProductSettings } from '../types/product';
-import { PRESET_VALUES } from '../types/product';
-import { Plus, X, Save, Edit, Eye, Power, Settings as SettingsIcon, Trash2, Folder, ChevronRight, ChevronDown } from 'lucide-react';
+import { ProductSettings as IProductSettings, defaultProductSettings, PRESET_VALUES } from '../types/product';
+import { Plus, X, Save, Edit, Eye, Power, Settings as SettingsIcon, Trash2, Folder, ChevronRight, ChevronDown, Calculator, Lock, Unlock } from 'lucide-react';
 import { ConversionFactor, getStoredConversionFactors, saveConversionFactors } from '../utils/productionCalculator';
 
 interface ProductFolder {
   id: string;
   name: string;
+}
+
+interface SampleData {
+  speedMPM: number;
+  logsPerMin: number;
 }
 
 export default function ProductSettings() {
@@ -38,8 +42,18 @@ export default function ProductSettings() {
   const [newFactor, setNewFactor] = useState<ConversionFactor>({
     diameter: 0,
     perfLength: 0,
-    factor: 0
+    factor: 0,
+    isLocked: false
   });
+  const [showDeleteFactorModal, setShowDeleteFactorModal] = useState(false);
+  const [factorToDelete, setFactorToDelete] = useState<number | null>(null);
+  const [showSampleCalculator, setShowSampleCalculator] = useState(false);
+  const [sampleData, setSampleData] = useState<SampleData[]>(Array(6).fill({
+    speedMPM: 0,
+    logsPerMin: 0
+  }));
+  const [calculatedFactor, setCalculatedFactor] = useState<number | null>(null);
+
   const [useCustomValues, setUseCustomValues] = useState(false);
   const [customValues, setCustomValues] = useState({
     diameter: '',
@@ -56,14 +70,95 @@ export default function ProductSettings() {
       const updated = [...conversionFactors, newFactor];
       setConversionFactors(updated);
       saveConversionFactors(updated);
-      setNewFactor({ diameter: 0, perfLength: 0, factor: 0 });
+      setNewFactor({ diameter: 0, perfLength: 0, factor: 0, isLocked: false });
     }
   };
 
-  const handleDeleteConversionFactor = (index: number) => {
-    const updated = conversionFactors.filter((_, i) => i !== index);
+  const handleDeleteFactor = () => {
+    if (factorToDelete === null) return;
+    const updated = conversionFactors.filter((_, i) => i !== factorToDelete);
     setConversionFactors(updated);
     saveConversionFactors(updated);
+    setShowDeleteFactorModal(false);
+    setFactorToDelete(null);
+  };
+
+  const toggleFactorLock = (index: number) => {
+    const updated = conversionFactors.map((factor, i) => 
+      i === index ? { ...factor, isLocked: !factor.isLocked } : factor
+    );
+    setConversionFactors(updated);
+    saveConversionFactors(updated);
+  };
+
+  const exportFactors = () => {
+    const dataStr = JSON.stringify(conversionFactors, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'conversion-factors.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const importFactors = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const imported = JSON.parse(e.target?.result as string);
+        if (Array.isArray(imported) && imported.every(factor => 
+          typeof factor.diameter === 'number' &&
+          typeof factor.perfLength === 'number' &&
+          typeof factor.factor === 'number'
+        )) {
+          setConversionFactors(imported);
+          saveConversionFactors(imported);
+        } else {
+          alert('Invalid file format');
+        }
+      } catch (error) {
+        alert('Error importing file');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleSampleDataChange = (index: number, field: keyof SampleData, value: string) => {
+    const numValue = value === '' ? 0 : parseFloat(value);
+    if (isNaN(numValue)) return;
+
+    setSampleData(prev => {
+      const newData = [...prev];
+      newData[index] = {
+        ...newData[index],
+        [field]: numValue
+      };
+      return newData;
+    });
+  };
+
+  const calculateAverageFactor = () => {
+    const validSamples = sampleData.filter(sample => sample.speedMPM > 0 && sample.logsPerMin > 0);
+    if (validSamples.length === 0) return;
+
+    const factors = validSamples.map(sample => sample.speedMPM / sample.logsPerMin);
+    const averageFactor = factors.reduce((sum, factor) => sum + factor, 0) / factors.length;
+    setCalculatedFactor(Number(averageFactor.toFixed(2)));
+  };
+
+  const applyCalculatedFactor = () => {
+    if (calculatedFactor === null) return;
+    setNewFactor(prev => ({
+      ...prev,
+      factor: calculatedFactor
+    }));
+    setShowSampleCalculator(false);
   };
 
   const handleAddFolder = () => {
@@ -331,14 +426,14 @@ export default function ProductSettings() {
   return (
     <div className="p-4">
       <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold">Product Settings</h2>
-          <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-3 mb-6">
+          <h2 className="text-xl font-semibold flex-shrink-0">Product Settings</h2>
+          <div className="flex items-center gap-1.5 ml-auto">
             <button
               onClick={() => setShowConversionModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              className="flex items-center gap-1 px-2 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
             >
-              <SettingsIcon className="w-5 h-5" />
+              <SettingsIcon className="w-4 h-4" />
               <span>Conversion Factors</span>
             </button>
             <button 
@@ -346,9 +441,9 @@ export default function ProductSettings() {
                 setShowAddModal(true);
                 setViewMode('edit');
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              className="flex items-center gap-1 px-2 py-1.5 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-4 h-4" />
               <span>Add Product Line</span>
             </button>
           </div>
@@ -618,12 +713,21 @@ export default function ProductSettings() {
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Manage Conversion Factors</h3>
-              <button
-                onClick={() => setShowConversionModal(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowSampleCalculator(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg" 
+                >
+                  <Calculator className="w-4 h-4" />
+                  <span>Factor Generator</span>
+                </button>
+                <button
+                  onClick={() => setShowConversionModal(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Add new factor form */}
@@ -678,7 +782,7 @@ export default function ProductSettings() {
                     <th className="px-4 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">Diameter (mm)</th>
                     <th className="px-4 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">Perf Length (mm)</th>
                     <th className="px-4 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">Factor</th>
-                    <th className="px-4 py-2 bg-gray-50"></th>
+                    <th className="px-4 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -687,18 +791,156 @@ export default function ProductSettings() {
                       <td className="px-4 py-2">{factor.diameter}</td>
                       <td className="px-4 py-2">{factor.perfLength}</td>
                       <td className="px-4 py-2">{factor.factor}</td>
-                      <td className="px-4 py-2">
+                      <td className="px-4 py-2 flex items-center gap-2">
                         <button
-                          onClick={() => handleDeleteConversionFactor(index)}
-                          className="p-1 hover:bg-red-100 rounded"
+                          onClick={() => toggleFactorLock(index)}
+                          className={`p-1 rounded ${
+                            factor.isLocked
+                              ? 'hover:bg-amber-100 text-amber-600'
+                              : 'hover:bg-gray-100 text-gray-400'
+                          }`}
+                          title={factor.isLocked ? 'Unlock factor' : 'Lock factor'}
                         >
-                          <Trash2 className="w-4 h-4 text-red-500" />
+                          {factor.isLocked ? (
+                            <Lock className="w-4 h-4" />
+                          ) : (
+                            <Unlock className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!factor.isLocked) {
+                              setFactorToDelete(index);
+                              setShowDeleteFactorModal(true);
+                            }
+                          }}
+                          className={`p-1 rounded ${
+                            factor.isLocked
+                              ? 'opacity-50 cursor-not-allowed'
+                              : 'hover:bg-red-100 text-red-500'
+                          }`}
+                          disabled={factor.isLocked}
+                          title={factor.isLocked ? 'Unlock to delete' : 'Delete factor'}
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Factor Confirmation Modal */}
+      {showDeleteFactorModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Delete Conversion Factor</h3>
+              <button
+                onClick={() => setShowDeleteFactorModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="mb-4">
+              Are you sure you want to delete this conversion factor? This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setShowDeleteFactorModal(false)}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteFactor}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sample Calculator Modal */}
+      {showSampleCalculator && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Sample Calculator</h3>
+              <button
+                onClick={() => setShowSampleCalculator(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Enter real-world samples to calculate an average conversion factor.
+              </p>
+
+              <div className="grid gap-4">
+                {sampleData.map((sample, index) => (
+                  <div key={index} className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Speed (MPM)
+                      </label>
+                      <input
+                        type="number"
+                        value={sample.speedMPM || ''}
+                        onChange={(e) => handleSampleDataChange(index, 'speedMPM', e.target.value)}
+                        className="w-full p-2 border rounded"
+                        step="0.1"
+                        placeholder="Enter speed..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Logs per Minute
+                      </label>
+                      <input
+                        type="number"
+                        value={sample.logsPerMin || ''}
+                        onChange={(e) => handleSampleDataChange(index, 'logsPerMin', e.target.value)}
+                        className="w-full p-2 border rounded"
+                        step="0.1"
+                        placeholder="Enter logs/min..."
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-between items-center pt-4 border-t">
+                <button
+                  onClick={calculateAverageFactor}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                >
+                  Calculate Average Factor
+                </button>
+                {calculatedFactor !== null && (
+                  <div className="flex items-center gap-4">
+                    <div className="text-lg font-semibold">
+                      Factor: {calculatedFactor}
+                    </div>
+                    <button
+                      onClick={applyCalculatedFactor}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    >
+                      Apply Factor
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

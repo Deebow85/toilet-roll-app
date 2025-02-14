@@ -10,6 +10,8 @@ interface ProductSettingsContextType {
   updateProduct: (folderId: string, productId: string, updates: Partial<ProductSettings>) => void;
   deleteProduct: (folderId: string, productId: string) => void;
   setProductActive: (folderId: string, productId: string) => void;
+  isProductLocked: boolean;
+  setProductLocked: (locked: boolean) => void;
 }
 
 const ProductSettingsContext = createContext<ProductSettingsContextType>({
@@ -19,12 +21,15 @@ const ProductSettingsContext = createContext<ProductSettingsContextType>({
   addProduct: () => {},
   updateProduct: () => {},
   deleteProduct: () => {},
-  setProductActive: () => {}
+  setProductActive: () => {},
+  isProductLocked: false,
+  setProductLocked: () => {}
 });
 
 export const useProductSettings = () => useContext(ProductSettingsContext);
 
 const STORAGE_KEY = 'productSettings';
+const LOCK_KEY = 'productLocked';
 
 const getInitialFolders = (): ProductFolder[] => {
   const stored = localStorage.getItem(STORAGE_KEY);
@@ -57,11 +62,20 @@ const getInitialFolders = (): ProductFolder[] => {
 
 export const ProductSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [folders, setFolders] = useState<ProductFolder[]>(getInitialFolders());
+  const [isProductLocked, setIsProductLocked] = useState(() => {
+    const stored = localStorage.getItem(LOCK_KEY);
+    return stored ? JSON.parse(stored) : false;
+  });
 
   // Save to localStorage whenever folders change
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
   }, [folders]);
+
+  // Save lock state to localStorage
+  useEffect(() => {
+    localStorage.setItem(LOCK_KEY, JSON.stringify(isProductLocked));
+  }, [isProductLocked]);
 
   const addFolder = (name: string) => {
     const id = name.toLowerCase().replace(/\s+/g, '-');
@@ -126,6 +140,8 @@ export const ProductSettingsProvider: React.FC<{ children: React.ReactNode }> = 
   };
 
   const setProductActive = (folderId: string, productId: string) => {
+    if (isProductLocked) return;
+    
     setFolders(prev => prev.map(folder => ({
       ...folder,
       products: folder.products.map(product => ({
@@ -133,6 +149,10 @@ export const ProductSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         isActive: folder.id === folderId && product.id === productId
       }))
     })));
+  };
+
+  const setProductLocked = (locked: boolean) => {
+    setIsProductLocked(locked);
   };
 
   return (
@@ -143,7 +163,9 @@ export const ProductSettingsProvider: React.FC<{ children: React.ReactNode }> = 
       addProduct,
       updateProduct,
       deleteProduct,
-      setProductActive
+      setProductActive,
+      isProductLocked,
+      setProductLocked
     }}>
       {children}
     </ProductSettingsContext.Provider>

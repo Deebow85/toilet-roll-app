@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useProductSettings } from './ProductSettingsContext';
+import { calculateRuntime, calculateRuntimeToBreak, formatTime, calculateLength } from '../utils/unwindCalculator';
 
 type ProductSettings = {
   coreSize: number;
@@ -19,6 +20,8 @@ interface UnwindData {
   timeuntilbreak: string;
   enddiameter: number;
   paperMachine: string;
+  bulk: number;
+  length: number;
 }
 
 interface HourData {
@@ -72,7 +75,9 @@ const defaultUnwindData: UnwindData = {
   runtimetobreak: 0,
   timeuntilbreak: '00:00:00',
   enddiameter: 0,
-  paperMachine: ''
+  paperMachine: '',
+  bulk: 0,
+  length: 0
 };
 
 const calculateSpeeds = (settings: ProductSettings): SpeedCalculations => {
@@ -84,6 +89,50 @@ const calculateSpeeds = (settings: ProductSettings): SpeedCalculations => {
     logSawSpeed,
     winderSpeed,
     downstreamSpeed,
+  };
+};
+
+const updateUnwindCalculations = (unwind: UnwindData): UnwindData => {
+  // Check if using PM3-2PLY
+  const isTwoPly = unwind.paperMachine === 'PM3-2PLY';
+
+  // Calculate runtime from current diameter to end diameter
+  const runtime = calculateRuntime(
+    unwind.diameter,
+    unwind.enddiameter,
+    unwind.speed,
+    unwind.bulk,
+    isTwoPly
+  );
+
+  // Calculate runtime from current diameter to break diameter
+  const runtimeToBreak = calculateRuntimeToBreak(
+    unwind.diameter,
+    unwind.break,
+    unwind.speed,
+    unwind.bulk,
+    isTwoPly
+  );
+
+  // Calculate total length
+  const length = calculateLength(
+    unwind.diameter,
+    unwind.enddiameter,
+    unwind.bulk
+  );
+
+  // Calculate expiry time
+  const now = new Date();
+  const expiryTime = new Date(now.getTime() + runtime * 60000);
+  const breakTime = new Date(now.getTime() + runtimeToBreak * 60000);
+
+  return {
+    ...unwind,
+    runtime,
+    runtimetobreak: runtimeToBreak,
+    expirytime: formatTime(runtime),
+    timeuntilbreak: formatTime(runtimeToBreak),
+    length
   };
 };
 
@@ -233,18 +282,22 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const unwindKey = `unwind${unwindId}` as keyof typeof prev;
       const currentUnwind = prev[unwindKey];
       
+      // Merge new data with current data
       const updatedUnwind = {
         ...currentUnwind,
         ...data
       };
 
-      if (JSON.stringify(currentUnwind) === JSON.stringify(updatedUnwind)) {
+      // Recalculate runtime values
+      const calculatedUnwind = updateUnwindCalculations(updatedUnwind);
+
+      if (JSON.stringify(currentUnwind) === JSON.stringify(calculatedUnwind)) {
         return prev;
       }
 
       return {
         ...prev,
-        [unwindKey]: updatedUnwind
+        [unwindKey]: calculatedUnwind
       };
     });
   }, []);

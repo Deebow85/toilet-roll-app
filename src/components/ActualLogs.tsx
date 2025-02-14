@@ -4,7 +4,11 @@ import { useProductSettings } from '../context/ProductSettingsContext';
 import { Eye, EyeOff, AlertCircle, Target, Users, Clock, BarChart3, Lock, Unlock, Copy } from 'lucide-react';
 import { calculateRequiredSpeed } from '../utils/productionCalculator';
 
-export default function ActualLogs() {
+interface ActualLogsProps {
+  activeTableId?: string | null;
+}
+
+export default function ActualLogs({ activeTableId }: ActualLogsProps) {
   const { tables, updateTableData, setTableActive } = useProduct();
   const { folders } = useProductSettings();
   const [globalTarget, setGlobalTarget] = useState(526);
@@ -75,6 +79,16 @@ export default function ActualLogs() {
   // Update currentHour state to use shift hours
   const [currentHour] = useState(getCurrentShiftHour());
 
+  // Add effect to scroll to active table
+  React.useEffect(() => {
+    if (activeTableId) {
+      const tableElement = document.getElementById(activeTableId);
+      if (tableElement) {
+        tableElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  }, [activeTableId]);
+
   const handleInputChange = (tableId: string, hour: number, field: string, value: string) => {
     // Don't update if hour is locked
     if (lockedHours[tableId]?.includes(hour)) return;
@@ -129,10 +143,6 @@ export default function ActualLogs() {
 
   const isHourLocked = (tableId: string, hour: number) => {
     return lockedHours[tableId]?.includes(hour) || false;
-  };
-
-  const toggleTableActive = (tableId: string) => {
-    setTableActive(tableId);
   };
 
   const getTableIcon = (type: 'actual' | 'target' | 'operator') => {
@@ -208,7 +218,7 @@ export default function ActualLogs() {
     
     return (
       <div className="flex flex-col space-y-2 p-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             {getTableIcon(table.type)}
             <div>
@@ -243,7 +253,7 @@ export default function ActualLogs() {
             )}
             <button
               onClick={() => toggleTableActive(table.id)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors shrink-0 ${
                 table.isActive
                   ? 'bg-green-100 text-green-700 hover:bg-green-200'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -567,12 +577,70 @@ export default function ActualLogs() {
       <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6">
         {tables.map((table) => (
           <div 
-            key={table.id} 
-            className={`rounded-lg border ${getTableColor(table.type)} ${
+            key={table.id}
+            id={table.id}
+            className={`rounded-lg border transition-colors ${getTableColor(table.type)} ${
               table.isActive ? 'ring-2 ring-blue-500' : ''
             }`}
           >
-            {renderTableHeader(table)}
+            {(() => {
+              const stats = calculateTableStats(table);
+              return (
+                <div className="flex flex-col space-y-2 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div 
+                      className="flex items-center gap-3 cursor-pointer group"
+                      onClick={() => setTableActive(table.id)}
+                    >
+                      {getTableIcon(table.type)}
+                      <div>
+                        <h3 className={`font-semibold transition-colors ${
+                          table.isActive ? 'text-blue-600' : 'text-gray-900 group-hover:text-blue-600'
+                        }`}>{table.name}</h3>
+                        <p className="text-sm text-gray-500">{table.description}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {table.type === 'operator' && (
+                        <div className="flex items-center gap-2 mr-4">
+                          <div className="flex flex-col">
+                            <label className="text-xs text-gray-500">Total Target</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                value={operatorTarget}
+                                onChange={(e) => setOperatorTarget(Number(e.target.value))}
+                                className="w-24 p-2 text-sm font-semibold text-center border rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                min="0"
+                                step="1"
+                              />
+                              <button
+                                onClick={() => applyOperatorTarget(table.id)}
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-100 hover:bg-purple-200 rounded transition-colors"
+                              >
+                                <Copy className="w-4 h-4" />
+                                <span>Split</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500 transition-all duration-300"
+                      style={{ width: `${stats.progress}%` }}
+                    />
+                  </div>
+                  <div className="text-sm text-gray-600 text-right">
+                    {stats.progress.toFixed(1)}%
+                  </div>
+                </div>
+              );
+            })()}
             {renderTable(table)}
           </div>
         ))}
